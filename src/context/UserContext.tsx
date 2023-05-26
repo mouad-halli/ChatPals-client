@@ -1,13 +1,13 @@
-import { createContext, useEffect, useState } from "react"
-import { userType } from "../@types/user"
-import { getUser } from "../api/userAPI"
-import { isAxiosError } from "axios"
-import { refreshAccessToken } from "../api/authenticationAPI"
+import { createContext, useState } from "react"
+import { userDto } from "../@types/user"
+import { Socket, io } from "socket.io-client"
 
 type userContextType = {
-    user: userType | null
-    setUser: React.Dispatch<React.SetStateAction<userType | null>>
-    handleLogout: () => void
+    user: userDto | null
+    socket: Socket<any, any>
+    handleSetUser: (user: userDto) => void
+    handleUnsetUser: () => void
+    handleUpdateUser: (newUserData: userDto) => void
 }
 
 type userContextProviderType = {
@@ -18,30 +18,46 @@ export const userContext = createContext({} as userContextType )
 
 export const UserProvider = ({children}: userContextProviderType) => {
 
-    const [user, setUser] = useState<userType | null>(null)
+    const [user, setUser] = useState<userDto | null>(null)
 
-    const handleLogout = () => setUser(null)
+    // const socket = io(import.meta.env.VITE_BACK_END_URL, { withCredentials: true, autoConnect: false })
 
-    useEffect(() => {
-        const fetchUser = async () => {
-            try {
-                const userData = await getUser()
-                setUser(userData)
-            } catch (error: unknown) {
-                if (isAxiosError(error) && error.response?.status === 401) {
-                    try {
-                        const userData = await refreshAccessToken()
-                        setUser(userData)
-                    } catch (error) {
-                        console.log(error)
-                    }
-                }
-                console.log(error)
-            }
-        }
+    const [socket, setSocket] = useState(io(import.meta.env.VITE_BACK_END_URL, { withCredentials: true, autoConnect: false }))
+    
+    const handleSetUser = (user: userDto) => {
+        setUser(user)
+        if (user.imgUrl)
+            user.imgUrl += '?' + new Date().getTime()
+        socket.connect()
+    }
 
-        fetchUser()
-    }, [])
+    const handleUnsetUser = () => {
+        if (user)
+            setUser(null)
+        socket.disconnect()
+    }
 
-    return <userContext.Provider value={{ user, setUser, handleLogout }}>{children}</userContext.Provider>
+    const handleUpdateUser = (newUserData: userDto) => {
+        if (newUserData.imgUrl)
+            newUserData.imgUrl += '?' + new Date().getTime()
+        setUser({...newUserData})
+    }
+
+    // useEffect(() => {
+    //     const fetchUser = async () => {
+    //         try {
+    //             const userData = await getUser()
+    //             handleSetUser(userData)
+    //         } catch (error: unknown) {
+    //             if (user) {
+    //                 handleUnsetUser()
+    //                 location.href = "auth"
+    //             }
+    //         }
+    //     }
+
+    //     fetchUser()
+    // }, [])
+
+    return <userContext.Provider value={{ user, socket, handleSetUser, handleUnsetUser, handleUpdateUser }}>{children}</userContext.Provider>
 }
